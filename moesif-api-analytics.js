@@ -8,6 +8,61 @@ var maxRetries = properties.maxRetries || 2;
 
 var version = '0.0.1'
 
+
+// -- Configuration for getUser
+function getUser() {
+  log("Entering getUser function");
+  var headerValue = getHeader(request.headers, 'Authorization'); 
+  log("Authorization header value: " + headerValue);
+
+  if (!headerValue) {
+    log("Authorization header is missing");
+    return null;
+  }
+
+  const token = headerValue.replace('Bearer ', '');
+  log("Extracted token: " + token);
+
+  try {
+    const payloadBase64 = token.split('.')[1];
+    log("Extracted payload base64: " + payloadBase64);
+
+    if (!payloadBase64) {
+      log("Invalid JWT format: Missing payload");
+      return null; // Invalid JWT format
+    }
+
+    const payloadJson = fromBase64(payloadBase64.replace(/-/g, '+').replace(/_/g, '/')).replace(/\0/g, ''); // Replace URL-safe characters
+    log("Decoded payload JSON: " + payloadJson);
+
+    const payload = JSON.parse(payloadJson);
+    log("Parsed payload: " + JSON.stringify(payload));
+
+    const userId = payload.sub || null;
+    log("Extracted user ID: " + userId);
+
+    return userId;
+  } catch (error) {
+    log("Error decoding or parsing JWT: " + error);
+    return null; // Invalid JWT
+  }
+}
+
+// -- Configuration for getCompany
+function getCompany() {
+  return undefined
+}
+
+// Configuration for getMetadata
+function getMetadata() {
+  var proxyName = context.getVariable('proxy.name');
+  var envName = context.getVariable('environment.name');
+  return {
+    apigee_proxy: proxyName,
+    apigee_env: envName,
+  }
+}
+
 // --- Helper Function: log ---
 function log(message) {
   if (debug) return print("[moesif-api-analytics] " + message);
@@ -122,14 +177,6 @@ function extractMoesifEvent() {
   var responseBody = parseBody(response.content, response.headers);
   log("Response body parsed, has body: " + (responseBody.body !== undefined));
 
-  // Map Apigee flow variables to Moesif event model
-  log("Creating Moesif event object");
-  var userId = context.getVariable('request.header.X-User-ID') || context.getVariable('apigee.developer.id') || undefined;
-  
-  var companyId = context.getVariable('request.header.X-Company-ID') || undefined;
-  var proxyName = context.getVariable('proxy.name');
-  var flowName = context.getVariable('flow.name');
-  var envName = context.getVariable('environment.name');
   var responseStatus = response.status ? response.status.code : 0;
   var transactionId = context.getVariable('request.header.X-Transaction-ID') || context.getVariable('transaction.id') || generateUUID();
 
@@ -149,13 +196,10 @@ function extractMoesifEvent() {
       transfer_encoding: responseBody.transferEncoding,
       time: now,
     },
-    user_id: userId,
-    company_id: companyId,
+    user_id: getUser(),
+    company_id: getCompany(),
     timestamp: now,
-    metadata: {
-      apigee_proxy: proxyName,
-      apigee_env: envName,
-    },
+    metadata: getMetadata(),
     transaction_id: transactionId
   };
   
@@ -276,6 +320,39 @@ function toBase64(str) {
     }
 
     result += base64Chars.charAt(enc1) + base64Chars.charAt(enc2) + base64Chars.charAt(enc3) + base64Chars.charAt(enc4);
+  }
+
+  return result;
+}
+
+/**
+ * Base64 decoding function
+ * @param {string} str - The base64 encoded string
+ * @return {string} The decoded string
+ */
+function fromBase64(str) {
+  const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  var result = '';
+  var i = 0;
+
+  while (i < str.length) {
+    var enc1 = base64Chars.indexOf(str.charAt(i++));
+    var enc2 = base64Chars.indexOf(str.charAt(i++));
+    var enc3 = base64Chars.indexOf(str.charAt(i++));
+    var enc4 = base64Chars.indexOf(str.charAt(i++));
+
+    var char1 = (enc1 << 2) | (enc2 >> 4);
+    var char2 = ((enc2 & 15) << 4) | (enc3 >> 2);
+    var char3 = ((enc3 & 3) << 6) | enc4;
+
+    result += String.fromCharCode(char1);
+
+    if (enc3 !== 64) {
+      result += String.fromCharCode(char2);
+    }
+    if (enc4 !== 64) {
+      result += String.fromCharCode(char3);
+    }
   }
 
   return result;

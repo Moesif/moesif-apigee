@@ -17,7 +17,7 @@ The integration is a javascript policy which installs within the Apigee console 
 
 * Within the Apigee console, go to your API Proxy and click add a policy. 
 * Select "Javascript" within the drop down
-* Select a file and upload the file [moesif-api-analytics.js](https://github.com/moesif/moesif-apigee/moesif-api-analytics.js).
+* Select a file and upload the file [`moesif-api-analytics.js`](https://github.com/Moesif/moesif-apigee/blob/master/moesif-api-analytics.js).
 
 ## 2. Configure policy
 
